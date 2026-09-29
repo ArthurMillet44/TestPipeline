@@ -32,3 +32,4 @@ Tant que cette règle n'est pas configurée, l'échec du check reste visible dan
 1. Ouvrir une pull request avec un titre non conforme (ex. `ajoute un truc`) → le check doit échouer, avec le message d'erreur visible dans les logs du job.
 2. Modifier le titre pour qu'il soit conforme (ex. `feat(auth): ajoute le rafraichissement du token`) → le check doit repasser au vert (le workflow se redéclenche sur `edited`, sans nouveau commit nécessaire).
 3. Si la règle de branche protégée est configurée, vérifier que le bouton de merge reste désactivé tant que le check n'est pas au vert.
+test pipeline pr
