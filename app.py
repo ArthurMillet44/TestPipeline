@@ -165,3 +165,4 @@ if question and col.count() > 0:
 elif question:
     st.info("Aucun document indexé : clique d'abord sur « Indexer » dans la barre latérale.")// test changelog feat
 // test changelog fix
+// test changelog round 2
