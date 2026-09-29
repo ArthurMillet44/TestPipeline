@@ -164,3 +164,4 @@ if question and col.count() > 0:
                 st.write(doc)
 elif question:
     st.info("Aucun document indexé : clique d'abord sur « Indexer » dans la barre latérale.")// test changelog feat
+// test changelog fix
