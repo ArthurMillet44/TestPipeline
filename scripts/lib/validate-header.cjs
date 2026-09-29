@@ -9,6 +9,26 @@ const TYPES = [
 
 const MAX_HEADER_LENGTH = 100;
 
+// Extrait { type, scope, breaking, subject } d'un header, ou null s'il ne
+// correspond pas du tout au format <type>(<scope>)!: <description>.
+// Ne valide pas les regles (type autorise, casse, etc.), juste la forme.
+function parseHeader(header) {
+  const match = header.match(/^([a-zA-Z-]+)(\(([^)]+)\))?(!)?:\s?(.*)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, type, , scope, breaking, subject] = match;
+
+  return {
+    type,
+    scope: scope || null,
+    breaking: Boolean(breaking),
+    subject,
+  };
+}
+
 function validateHeader(header) {
   if (!header || !header.trim()) {
     return {
@@ -18,9 +38,9 @@ function validateHeader(header) {
     };
   }
 
-  const match = header.match(/^([a-zA-Z-]+)(\(([^)]+)\))?(!)?:\s?(.*)$/);
+  const parsed = parseHeader(header);
 
-  if (!match) {
+  if (!parsed) {
     return {
       valid: false,
       problem: `aucun type reconnu au debut du message. Types valides : ${TYPES.join(', ')}.`,
@@ -28,7 +48,7 @@ function validateHeader(header) {
     };
   }
 
-  const [, type, , scope, , subject] = match;
+  const { type, scope, subject } = parsed;
 
   if (!TYPES.includes(type)) {
     return {
@@ -78,7 +98,7 @@ function validateHeader(header) {
     };
   }
 
-  return { valid: true };
+  return { valid: true, type, scope, subject };
 }
 
-module.exports = { validateHeader, TYPES, MAX_HEADER_LENGTH };
+module.exports = { validateHeader, parseHeader, TYPES, MAX_HEADER_LENGTH };
