@@ -20,8 +20,6 @@
   },
   "homepage": "https://github.com/ArthurMillet44/TestPipeline#readme",
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
     "husky": "^9.1.7"
   }
 }

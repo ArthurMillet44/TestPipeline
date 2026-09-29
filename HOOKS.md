@@ -1,106 +1,147 @@
-# Git hook — Conventional Commits
+# Git hooks
+
+## Table des matières
+
+- [Commits](#commits)
+  - [Choix des technologies](#choix-des-technologies)
+    - [Husky](#husky)
+    - [Script Node](#script-node)
+  - [Fonctionnement du script](#fonctionnement-du-script)
+  - [Tests manuels à effectuer](#tests-manuels-à-effectuer)
+    - [Vérifier que les hooks sont bien installés](#vérifier-que-les-hooks-sont-bien-installés)
+    - [Commit invalide en terminal → doit être rejeté avec un message clair](#commit-invalide-en-terminal--doit-être-rejeté-avec-un-message-clair)
+    - [Vérifier qu'un `git commit --no-verify` contourne le hook](#vérifier-quun-git-commit---no-verify-contourne-le-hook)
+- [Branches](#branches)
+  - [Fonctionnement du script](#fonctionnement-du-script-1)
+  - [Tests manuels à effectuer](#tests-manuels-à-effectuer-1)
+
+## Commits
 
 Ce projet bloque tout commit dont le message ne respecte pas la convention
-[Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `style:`, `perf:`, `build:`, `ci:`, `revert:`...).
+[Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `style:`, `perf:`, `ci:`).
 
-La vérification est faite par un hook git natif (`commit-msg`), installé par **Husky** et exécuté par **commitlint**. Elle s'applique quel que soit le point d'entrée : terminal, VSCode (panneau Source Control), GitKraken, etc., puisque tous passent par le même moteur git.
+### Choix des technologies
 
-## Tests manuels à effectuer
+#### Husky
 
-### 1. Vérifier que les hooks sont bien installés
+La vérification est faite par un hook git natif (`commit-msg`), installé par **Husky**, qui appelle un script Node ([scripts/verify-commit-msg.cjs](scripts/verify-commit-msg.cjs)). Le hook s'applique depuis n'importe quel terminal/interface utilisant git.
+
+Nous avons choisi de ne pas passer directement via le `.git/hooks` car ce dernier n'est pas versionné. Par conséquent, chaque personne qui va cloner le projet devra recréer à la main le fichier. C'est pour cette raison que nouos passons par Husky qui change l'emplacement où git va chercher les hooks.
+
+Le script `"prepare": "husky"` dans [package.json](package.json) configure `core.hooksPath` vers `.husky/_` à chaque `npm install`
+
+#### Script Node
+
+La première version de ce hook utilisait commitlint, mais ses messages sortent avec des codes couleur ANSI (`[90m`, `[31m`...) que l'interface de VsCode n'interprète pas. Le résultat en sortie après un commit bloqué était donc illisible. Le script `verify-commit-msg.cjs` lui, n'affiche que du texte brut, avec un seul message ciblé par situation.
+
+### Fonctionnement du script
+
+Les messages d'erreur sont personnalisés en français, un par situation :
+
+| Situation | Message |
+|---|---|
+| Message vide | `le message est vide.` |
+| Pas de type (`corrige le bug`) | `aucun type reconnu au debut du message. Types valides : ...` |
+| Type invalide (`feature: ...`) | `le type "feature" n'existe pas. Types valides : ...` |
+| Scope en majuscule (`feat(Auth): ...`) | `le scope "(Auth)" doit etre en minuscules.` |
+| Description vide (`feat:`) | `il manque une description apres "feat:".` |
+| Point final (`fix: corrige le bug.`) | `la description ne doit pas se terminer par un point.` |
+| Majuscule en début de description (`fix: Corrige...`) | `la description doit commencer par une minuscule.` |
+| Première ligne trop longue (>100 car.) | `la premiere ligne fait X caracteres (max 100)...` |
+
+Chaque erreur affiche aussi le message reçu et un exemple valide, par exemple :
+```
+Commit refuse : le message ne respecte pas le format Conventional Commits.
+Message recu  : "test"
+Probleme      : aucun type reconnu au debut du message. Types valides : feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
+Exemple valide: "fix: corrige le crash au demarrage"
+```
+
+Pour changer un message ou ajouter une règle, il faut éditer directement [scripts/verify-commit-msg.cjs](scripts/verify-commit-msg.cjs). Chaque cas est représenté par un `if` qui appelle `fail(problème, exemple)`.
+
+### Tests manuels à effectuer
+
+#### Vérifier que les hooks sont bien installés
 ```bash
 npm install
 git config core.hooksPath
 # doit afficher : .husky/_
 ```
 
-### 2. Commit invalide en terminal → doit être rejeté
+#### Commit invalide en terminal → doit être rejeté avec un message clair
+Tester chaque situation ci-dessous et vérifier que le message affiché correspond bien au tableau plus haut :
 ```bash
-git commit --allow-empty -m "mauvais message"
-```
-Résultat attendu : commit refusé, commitlint affiche les erreurs (`subject may not be empty`, `type may not be empty`, etc.), code de sortie ≠ 0.
-
-Autres messages invalides à tester :
-```bash
-git commit --allow-empty -m "Fix bug"          # type manquant/mauvais casse
-git commit --allow-empty -m "feat sans deux points"
-git commit --allow-empty -m "FEAT: majuscule"  # selon config, peut être rejeté
+git commit --allow-empty -m "corrige le bug de connexion"     # pas de type
+git commit --allow-empty -m "feature: ajoute un truc"         # type invalide
+git commit --allow-empty -m "feat(Auth): ajoute le login"     # scope en majuscule
+git commit --allow-empty -m "feat:"                           # description vide
+git commit --allow-empty -m "fix: corrige le bug."            # point final
+git commit --allow-empty -m "fix: Corrige le bug"             # majuscule en début de description
 ```
 
-### 3. Commit valide en terminal → doit être accepté
-```bash
-git commit --allow-empty -m "feat: ajoute la validation des commits"
-git commit --allow-empty -m "fix(auth): corrige le token expiré"
-git commit --allow-empty -m "chore: met a jour les dependances"
-```
-Résultat attendu : commit créé sans erreur.
+Tester également depuis une interface comme celle de VsCode
 
-### 4. Test depuis VSCode
-1. Modifier un fichier, le stager depuis l'onglet **Source Control**.
-2. Taper un message non conventionnel dans le champ de message et cliquer sur **Commit**.
-3. Vérifier que VSCode affiche une erreur (visible dans la notification ou l'onglet **Output → Git**) et qu'aucun commit n'est créé.
-4. Recommencer avec un message conventionnel (`feat: ...`) → le commit doit passer.
-
-### 5. Test avec un commit vide via une extension tierce (optionnel)
-Si l'équipe utilise GitLens ou une autre extension pour commit, refaire le test 4 avec cet outil pour confirmer que le hook s'applique aussi (c'est le cas par construction, car ces outils utilisent le même binaire `git`).
-
-### 6. Vérifier qu'un `git commit --no-verify` contourne volontairement le hook
+#### Vérifier qu'un `git commit --no-verify` contourne le hook
 ```bash
 git commit --allow-empty -m "mauvais message" --no-verify
 ```
-Résultat attendu : commit accepté malgré le message invalide (comportement normal de git, `--no-verify` est une échappatoire volontaire qu'on ne peut pas empêcher côté client — la vraie garde-fou reste la vérification côté CI/serveur si besoin).
 
-## Importer ce hook dans un autre projet
+## Branches
 
-### Fichiers à copier
+Ce projet bloque également le push d'une branche dont le nom ne respecte pas le format `<type>/<description-courte>` (types autorisés : `feature`, `fix`, `hotfix`, `refactor`, `docs`, `test`, `chore`, `ci`).
+
+La vérification est faite par un hook `pre-push`, installé par Husky, qui appelle [scripts/verify-branch-name.cjs](scripts/verify-branch-name.cjs).
+
+Contrairement au message de commit, le nom d'une branche ne peut pas être bloqué à sa création : git n'a pas de hook qui s'exécute avant qu'une branche soit créée. `post-checkout` existe mais s'exécute après coup et ne peut qu'avertir, pas empêcher. Le seul moment où on peut réellement bloquer, c'est avant qu'elle parte vers le remote : c'est le rôle du hook `pre-push`.
+
+Les branches `main`, `master` et `develop` sont exclues de la vérification (elles ne suivent pas le format `<type>/<description>`) : un push vers l'une de ces branches passe toujours, quel que soit son nom, car le script les reconnaît via une liste `PROTECTED_BRANCHES` codée en dur dans [scripts/verify-branch-name.cjs](scripts/verify-branch-name.cjs) et saute la vérification pour elles.
+
+Ce hook ne fait que vérifier un *nom* de branche : il ne bloque pas, et n'a pas vocation à bloquer, le fait de pousser directement sur `main`/`develop` sans passer par une pull request. Si on veut interdire le push direct sur ces branches, ça se règle côté serveur (ex. règle de branche protégée sur GitHub), pas via un hook `pre-push` local qui peut être contourné avec `--no-verify` ou simplement en modifiant le script.
+
+### Fonctionnement du script
+
+Git fournit au hook `pre-push`, via son entrée standard (stdin), la liste des références en train d'être poussées, une par ligne, au format :
+
 ```
-.husky/commit-msg        → le hook git (appelle commitlint)
-commitlint.config.js     → la config des règles conventional commits
-```
-
-### Modifications à reporter dans le `package.json` cible
-Ajouter dans `devDependencies` :
-```json
-{
-  "devDependencies": {
-    "husky": "^9.1.7",
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3"
-  }
-}
-```
-
-Ajouter le script `prepare` (indispensable : c'est lui qui réinstalle les hooks pour chaque personne qui clone/`npm install` le projet) :
-```json
-{
-  "scripts": {
-    "prepare": "husky"
-  }
-}
+<ref locale> <sha locale> <ref distante> <sha distante>
 ```
 
-### Commandes à exécuter dans le projet cible
+Le script lit cette entrée, extrait le nom de chaque branche locale, et vérifie son format avec une expression régulière. Si une branche renommée/supprimée est détectée (sha locale à zéro), elle est ignorée.
+
+Exemple de message affiché en cas de rejet :
+```
+Push refuse : le nom de la branche ne respecte pas la convention du projet.
+Branche       : "nimportequoi"
+Probleme      : le nom ne suit pas le format "<type>/<description-courte>". Types autorises : feature, fix, hotfix, refactor, docs, test, chore, ci.
+Exemple valide: "feature/authentification-utilisateur"
+```
+
+### Tests manuels à effectuer
+
+Comme `pre-push` ne se déclenche qu'au moment d'un push vers un remote, il faut un remote pour tester (un dépôt "bare" local suffit) :
+
 ```bash
-# 1. Installer les dépendances (déclenche aussi "prepare" automatiquement)
-npm install
+# Créer un faux remote local
+git init --bare /tmp/fake-remote.git
+git remote add origin /tmp/fake-remote.git
 
-# 2. Vérifier que le hook est bien actif
-git config core.hooksPath
-# doit afficher : .husky/_
+# Branche invalide → doit être rejetée
+git checkout -b nimportequoi
+git push origin nimportequoi
 
-# 3. Tester
-git commit --allow-empty -m "message invalide"      # doit échouer
-git commit --allow-empty -m "feat: message valide"  # doit réussir
-```
+# Type invalide (feat au lieu de feature) → doit être rejetée
+git checkout main
+git checkout -b feat/test-branch
+git push origin feat/test-branch
 
-> Si le projet cible n'a pas encore de `.git`, faire `git init` avant `npm install` : Husky a besoin d'un dépôt git pour configurer `core.hooksPath`.
+# Branche valide → doit être acceptée
+git checkout main
+git checkout -b feature/test-branche-valide
+git push origin feature/test-branche-valide
 
-### Cas particulier : monorepo / hooks à la racine uniquement
-Le hook doit être installé à la racine du dépôt git (là où se trouve `.git/`), pas dans un sous-dossier `packages/xxx`. Si `package.json` (et donc `npm install`) vit dans un sous-dossier, adapter le script `prepare` avec le chemin relatif vers la racine, par exemple :
-```json
-{
-  "scripts": {
-    "prepare": "cd .. && husky packages/mon-app/.husky"
-  }
-}
+# Nettoyage
+git checkout main
+git branch -D nimportequoi feat/test-branch feature/test-branche-valide
+git remote remove origin
+rm -rf /tmp/fake-remote.git
 ```
