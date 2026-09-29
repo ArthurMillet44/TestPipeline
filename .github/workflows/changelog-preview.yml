@@ -1,0 +1,40 @@
+name: Changelog preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    if: github.event.pull_request.head.ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Genere la previsualisation du changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/generate-changelog.cjs
+
+      - name: Commit et push si le changelog a change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "Aucun changement, rien a commit."
+          else
+            git commit -m "chore: met a jour la previsualisation du changelog"
+            git push origin HEAD:develop
+          fi
