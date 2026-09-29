@@ -163,4 +163,4 @@ if question and col.count() > 0:
             with st.expander(f"[{i}] {meta['origin']} — {meta['source']}  (pertinence {1-dist:.0%})"):
                 st.write(doc)
 elif question:
-    st.info("Aucun document indexé : clique d'abord sur « Indexer » dans la barre latérale.")
+    st.info("Aucun document indexé : clique d'abord sur « Indexer » dans la barre latérale.")// test changelog feat
